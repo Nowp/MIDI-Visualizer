@@ -9,7 +9,7 @@ Here are the instructions to have a proper development environment.
 
 ### Set up a virtual MIDI device (Optional)
 
-If you don't have any MIDI device that is usable on your computer, you will definitely need this for testing purposes.
+If you don't have any MIDI device that is usable on your computer, you will definitely need this for testing.
 
 #### Windows
 1) Download a virtual MIDI device ([VMPK](https://vmpk.sourceforge.io/) for example).
