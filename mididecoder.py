@@ -20,11 +20,3 @@ class MidiInputDevice:
     def get_message(self):
         """ Returns the message currently in the input buffer composed by the data and a delta time"""
         return self.midiin.get_message()
-
-
-device = MidiInputDevice()
-
-while True:
-    msg = device.get_message()
-    if msg is not None:
-        print(msg[0])

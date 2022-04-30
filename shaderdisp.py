@@ -3,17 +3,29 @@
 # coding: utf-8
 
 # flake8: noqa
-import ctypes
+from ctypes import *
 import os
 import sdl2
 import sdl2.ext
 import time
+import struct
 from vulkan import *
+from cffi import FFI
 
+import mididecoder
+
+ffibuilder = FFI()
+ffibuilder.cdef("""
+typedef struct {
+  float time;
+  uint32_t table;
+  uint32_t filter;
+} DJData;
+""")
+ffibuilder.set_source('_main', '')
 
 WIDTH = 1000
 HEIGHT = 700
-
 
 # ----------
 # Init sdl2
@@ -30,7 +42,7 @@ if not window:
 
 wm_info = sdl2.SDL_SysWMinfo()
 sdl2.SDL_VERSION(wm_info.version)
-sdl2.SDL_GetWindowWMInfo(window, ctypes.byref(wm_info))
+sdl2.SDL_GetWindowWMInfo(window, byref(wm_info))
 # sdl2.SDL_SetWindowFullscreen(window, sdl2.SDL_WINDOW_FULLSCREEN)
 
 # ----------
@@ -86,9 +98,11 @@ vkDestroyDebugReportCallbackEXT = vkGetInstanceProcAddr(
     instance,
     "vkDestroyDebugReportCallbackEXT")
 
+
 def debugCallback(*args):
     print('DEBUG: ' + args[5] + ' ' + args[6])
     return 0
+
 
 debug_create = VkDebugReportCallbackCreateInfoEXT(
     sType=VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
@@ -96,10 +110,10 @@ debug_create = VkDebugReportCallbackCreateInfoEXT(
     pfnCallback=debugCallback)
 callback = vkCreateDebugReportCallbackEXT(instance, debug_create, None)
 
-
 # ----------
 # Create surface
 vkDestroySurfaceKHR = vkGetInstanceProcAddr(instance, "vkDestroySurfaceKHR")
+
 
 def surface_xlib():
     print("Create Xlib surface")
@@ -111,6 +125,7 @@ def surface_xlib():
         flags=0)
     return vkCreateXlibSurfaceKHR(instance, surface_create, None)
 
+
 def surface_wayland():
     print("Create wayland surface")
     vkCreateWaylandSurfaceKHR = vkGetInstanceProcAddr(instance, "vkCreateWaylandSurfaceKHR")
@@ -120,6 +135,7 @@ def surface_wayland():
         surface=wm_info.info.wl.surface,
         flags=0)
     return vkCreateWaylandSurfaceKHR(instance, surface_create, None)
+
 
 def surface_win32():
     def get_instance(hWnd):
@@ -139,6 +155,7 @@ def surface_win32():
         flags=0)
     return vkCreateWin32SurfaceKHR(instance, surface_create, None)
 
+
 surface_mapping = {
     sdl2.SDL_SYSWM_X11: surface_xlib,
     sdl2.SDL_SYSWM_WAYLAND: surface_wayland,
@@ -151,16 +168,14 @@ surface = surface_mapping[wm_info.subsystem]()
 # Select physical device
 physical_devices = vkEnumeratePhysicalDevices(instance)
 
-
 physical_devices_features = {physical_device: vkGetPhysicalDeviceFeatures(physical_device)
-                    for physical_device in physical_devices}
+                             for physical_device in physical_devices}
 physical_devices_properties = {physical_device: vkGetPhysicalDeviceProperties(physical_device)
-                      for physical_device in physical_devices}
+                               for physical_device in physical_devices}
 physical_device = physical_devices[0]
 print("availables devices: %s" % [p.deviceName
                                   for p in physical_devices_properties.values()])
 print("selected device: %s\n" % physical_devices_properties[physical_device].deviceName)
-
 
 # ----------
 # Select queue family
@@ -179,7 +194,7 @@ for i, queue_family in enumerate(queue_families):
         queueFamilyIndex=i,
         surface=surface)
     if (queue_family.queueCount > 0 and
-       queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT):
+            queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT):
         queue_family_graphic_index = i
         queue_family_present_index = i
     # if queue_family.queueCount > 0 and support_present:
@@ -188,14 +203,13 @@ for i, queue_family in enumerate(queue_families):
 print("indice of selected queue families, graphic: %s, presentation: %s\n" % (
     queue_family_graphic_index, queue_family_present_index))
 
-
 # ----------
 # Create logical device and queues
 extensions = vkEnumerateDeviceExtensionProperties(physicalDevice=physical_device, pLayerName=None)
 extensions = [e.extensionName for e in extensions]
 print("availables device extensions: %s\n" % extensions)
 
-#only use the extensions necessary
+# only use the extensions necessary
 extensions = [VK_KHR_SWAPCHAIN_EXTENSION_NAME]
 
 queues_create = [VkDeviceQueueCreateInfo(sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -228,7 +242,6 @@ presentation_queue = vkGetDeviceQueue(
     queueIndex=0)
 print("Logical device and graphic queue successfully created\n")
 
-
 # ----------
 # Create swapchain
 vkGetPhysicalDeviceSurfaceCapabilitiesKHR = vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR")
@@ -242,20 +255,23 @@ surface_present_modes = vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice
 if not surface_formats or not surface_present_modes:
     raise Exception('No available swapchain')
 
+
 def get_surface_format(formats):
     for f in formats:
         if f.format == VK_FORMAT_UNDEFINED:
-            return  f
+            return f
         if (f.format == VK_FORMAT_B8G8R8A8_UNORM and
-            f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR):
+                f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR):
             return f
     return formats[0]
+
 
 def get_surface_present_mode(present_modes):
     for p in present_modes:
         if p == VK_PRESENT_MODE_MAILBOX_KHR:
             return p
     return VK_PRESENT_MODE_FIFO_KHR;
+
 
 def get_swap_extent(capabilities):
     uint32_max = 4294967295
@@ -282,7 +298,6 @@ if surface_capabilities.maxImageCount > 0 and imageCount > surface_capabilities.
 
 print('selected format: %s' % surface_format.format)
 print('%s available swapchain present modes' % len(surface_present_modes))
-
 
 imageSharingMode = VK_SHARING_MODE_EXCLUSIVE
 queueFamilyIndexCount = 0
@@ -345,7 +360,6 @@ for image in swapchain_images:
         subresourceRange=subresourceRange)
 
     image_views.append(vkCreateImageView(logical_device, imageview_create, None))
-
 
 print("%s images view created" % len(image_views))
 
@@ -511,18 +525,15 @@ color_blend_create = VkPipelineColorBlendStateCreateInfo(
     pAttachments=[color_blend_attachement],
     blendConstants=[0, 0, 0, 0])
 
-push_constant_ranges = VkPushConstantRange(
-    stageFlags=0,
-    offset=0,
-    size=0)
+time_push = VkPushConstantRange(VK_SHADER_STAGE_FRAGMENT_BIT, offset=0, size=sys.getsizeof(float()))
 
 pipeline_layout_create = VkPipelineLayoutCreateInfo(
     sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
     flags=0,
     setLayoutCount=0,
     pSetLayouts=None,
-    pushConstantRangeCount=0,
-    pPushConstantRanges=[push_constant_ranges])
+    pushConstantRangeCount=1,
+    pPushConstantRanges=[time_push])
 
 pipeline_layout = vkCreatePipelineLayout(logical_device, pipeline_layout_create, None)
 
@@ -571,7 +582,7 @@ for image in image_views:
 command_pool_create = VkCommandPoolCreateInfo(
     sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     queueFamilyIndex=queue_family_graphic_index,
-    flags=0)
+    flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
 
 command_pool = vkCreateCommandPool(logical_device, command_pool_create, None)
 
@@ -584,41 +595,6 @@ command_buffers_create = VkCommandBufferAllocateInfo(
 
 command_buffers = vkAllocateCommandBuffers(logical_device, command_buffers_create)
 
-# Record command buffer
-for i, command_buffer in enumerate(command_buffers):
-    command_buffer_begin_create = VkCommandBufferBeginInfo(
-        sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        flags=VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
-        pInheritanceInfo=None)
-
-    vkBeginCommandBuffer(command_buffer, command_buffer_begin_create)
-
-    # Create render pass
-    render_area = VkRect2D(offset=VkOffset2D(x=0, y=0),
-                           extent=extent)
-    color = VkClearColorValue(float32=[0, 1, 0, 1])
-    clear_value = VkClearValue(color=color)
-
-    render_pass_begin_create = VkRenderPassBeginInfo(
-        sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        renderPass=render_pass,
-        framebuffer=framebuffers[i],
-        renderArea=render_area,
-        clearValueCount=1,
-        pClearValues=[clear_value])
-
-    vkCmdBeginRenderPass(command_buffer, render_pass_begin_create, VK_SUBPASS_CONTENTS_INLINE)
-
-    # Bing pipeline
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline)
-
-    # Draw
-    vkCmdDraw(command_buffer, 3, 1, 0, 0)
-
-    # End
-    vkCmdEndRenderPass(command_buffer)
-    vkEndCommandBuffer(command_buffer)
-
 # Create semaphore
 semaphore_create = VkSemaphoreCreateInfo(
     sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -628,7 +604,6 @@ semaphore_render_finished = vkCreateSemaphore(logical_device, semaphore_create, 
 
 vkAcquireNextImageKHR = vkGetInstanceProcAddr(instance, "vkAcquireNextImageKHR")
 vkQueuePresentKHR = vkGetInstanceProcAddr(instance, "vkQueuePresentKHR")
-
 
 wait_semaphores = [semaphore_image_available]
 wait_stages = [VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT]
@@ -657,13 +632,56 @@ present_create = VkPresentInfoKHR(
 # optimization to avoid creating a new array each time
 submit_list = ffi.new('VkSubmitInfo[1]', [submit_create])
 
+current_time = 0.0
 
 def draw_frame():
+    constants = ffibuilder.new("DJData *")
+    constants.time = clock() - start_time
+    constants.table = (high << (7*2)) + (med << 7) + low
+    constants.filter = pfilter
+
     try:
         image_index = vkAcquireNextImageKHR(logical_device, swapchain, UINT64_MAX, semaphore_image_available, None)
     except VkNotReady:
         print('not ready')
         return
+
+    # Record command buffer
+    for i, command_buffer in enumerate(command_buffers):
+        command_buffer_begin_create = VkCommandBufferBeginInfo(
+            sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            flags=VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
+            pInheritanceInfo=None)
+
+        vkBeginCommandBuffer(command_buffer, command_buffer_begin_create)
+
+        # Create render pass
+        render_area = VkRect2D(offset=VkOffset2D(x=0, y=0),
+                               extent=extent)
+        color = VkClearColorValue(float32=[0, 1, 0, 1])
+        clear_value = VkClearValue(color=color)
+
+        render_pass_begin_create = VkRenderPassBeginInfo(
+            sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            renderPass=render_pass,
+            framebuffer=framebuffers[i],
+            renderArea=render_area,
+            clearValueCount=1,
+            pClearValues=[clear_value])
+
+        vkCmdBeginRenderPass(command_buffer, render_pass_begin_create, VK_SUBPASS_CONTENTS_INLINE)
+
+        # Bing pipeline
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline)
+
+        vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(c_float) + 2 * sizeof(c_uint32), constants)
+
+        # Draw
+        vkCmdDraw(command_buffer, 3, 1, 0, 0)
+
+        # End
+        vkCmdEndRenderPass(command_buffer)
+        vkEndCommandBuffer(command_buffer)
 
     submit_create.pCommandBuffers[0] = command_buffers[image_index]
     vkQueueSubmit(graphic_queue, 1, submit_list, None)
@@ -682,9 +700,33 @@ if sys.version_info >= (3, 3):
 else:
     clock = time.clock
 
+start_time = clock()
 last_time = clock() * 1000
 fps = 0
+
+device = mididecoder.MidiInputDevice()
+
+low, med, high, pfilter = 0, 0, 0, 0
+
 while running:
+    msg = device.get_message()
+
+    if msg is not None:
+        data, _ = msg
+        command, controller, value = data[0], data[1], data[2]
+        if command == 0xB0:
+            if controller == 0x2F:
+                low = value
+            elif controller == 0x2B:
+                med = value
+            elif controller == 0x27:
+                high = value
+        elif command == 0xB7:
+            if controller == 0x37:
+                pfilter = value
+
+    # print("{}, {}, {}".format(low, med, high))
+
     fps += 1
     if clock() * 1000 - last_time >= 1000:
         last_time = clock() * 1000
@@ -698,7 +740,6 @@ while running:
             running = False
             vkDeviceWaitIdle(logical_device)
             break
-
 
 # ----------
 # Clean everything
