@@ -3,9 +3,11 @@ import rtmidi
 
 class MidiInputDevice:
     """ Represents the Input stream with a MIDI device """
-    def __init__(self):
+    def __init__(self, cb=None):
         self.midiin = rtmidi.MidiIn()
         self.initialize_midi()
+        if cb is not None:
+            self.midiin.set_callback(cb)
 
     def initialize_midi(self):
         """ Function initializing the stream with the MIDI device """

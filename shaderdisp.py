@@ -3,6 +3,7 @@
 # coding: utf-8
 
 # flake8: noqa
+import random
 from ctypes import *
 import os
 import sdl2
@@ -704,27 +705,28 @@ start_time = clock()
 last_time = clock() * 1000
 fps = 0
 
-device = mididecoder.MidiInputDevice()
-
 low, med, high, pfilter = 0, 0, 0, 0
 
+
+def message_received(msg, _):
+    global low, med, high, pfilter
+    data, _ = msg
+    command, controller, value = data[0], data[1], data[2]
+    if command == 0xB0:
+        if controller == 0x2F:
+            low = value
+        elif controller == 0x2B:
+            med = value
+        elif controller == 0x27:
+            high = value
+    elif command == 0xB7:
+        if controller == 0x37:
+            pfilter = value
+
+
+device = mididecoder.MidiInputDevice(message_received)
+
 while running:
-    msg = device.get_message()
-
-    if msg is not None:
-        data, _ = msg
-        command, controller, value = data[0], data[1], data[2]
-        if command == 0xB0:
-            if controller == 0x2F:
-                low = value
-            elif controller == 0x2B:
-                med = value
-            elif controller == 0x27:
-                high = value
-        elif command == 0xB7:
-            if controller == 0x37:
-                pfilter = value
-
     # print("{}, {}, {}".format(low, med, high))
 
     fps += 1
