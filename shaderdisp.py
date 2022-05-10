@@ -30,6 +30,8 @@ ffibuilder.set_source('_main', '')
 WIDTH = 1000
 HEIGHT = 700
 
+SPEED = 0.1
+
 # ----------
 # Init sdl2
 if sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO) != 0:
@@ -46,7 +48,7 @@ if not window:
 wm_info = sdl2.SDL_SysWMinfo()
 sdl2.SDL_VERSION(wm_info.version)
 sdl2.SDL_GetWindowWMInfo(window, byref(wm_info))
-#sdl2.SDL_SetWindowFullscreen(window, sdl2.SDL_WINDOW_FULLSCREEN)
+#sdl2.SDL_SetWindowFullscreen(window, sdl2.SDL_WINDOW_FULLSCREEN_DESKTOP)
 
 # ----------
 # Create instance
@@ -640,8 +642,8 @@ current_time = 0.0
 def draw_frame():
     constants = ffibuilder.new("DJData *")
     constants.time = clock() - start_time
-    constants.table = (high << (7*2)) + (med << 7) + low
-    constants.filter = pfilter
+    constants.table = (int(high) << (7*2)) + (int(med) << 7) + int(low)
+    constants.filter = int(pfilter)
     constants.resolutionX = WIDTH
     constants.resolutionY = HEIGHT
 
@@ -710,23 +712,34 @@ last_time = clock() * 1000
 fps = 0
 
 low, med, high, pfilter = [2**4 for _ in range(4)]
-
+tlow, tmed, thigh, tpfilter = [2**4 for _ in range(4)]
 
 def message_received(msg, _):
     global low, med, high, pfilter
+    global tlow, tmed, thigh, tpfilter
+
     data, _ = msg
     command, controller, value = data[0], data[1], data[2]
     if command == 0xB0:
         if controller == 0x2F:
-            low = value
+            tlow = value
         elif controller == 0x2B:
-            med = value
+            tmed = value
         elif controller == 0x27:
-            high = value
+            thigh = value
     elif command == 0xB7:
         if controller == 0x37:
-            pfilter = value
+            tpfilter = value
 
+
+def update_values():
+    global low, med, high, pfilter
+    global tlow, tmed, thigh, tpfilter
+
+    low += (tlow - low) * SPEED
+    med += (tmed - med) * SPEED
+    high += (thigh - high) * SPEED
+    pfilter += (tpfilter - pfilter) * SPEED
 
 device = mididecoder.MidiInputDevice(message_received)
 
@@ -739,6 +752,7 @@ while running:
         print("FPS: %s" % fps)
         fps = 0
 
+    update_values()
     events = sdl2.ext.get_events()
     draw_frame()
     for event in events:

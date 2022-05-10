@@ -3,8 +3,8 @@
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 outColor;
 
-#define MAX_STEPS 100
-#define EPSILON 0.001
+#define MAX_STEPS 30
+#define EPSILON 0.01
 #define MAX_DISTANCE 10
 
 #define HIGH_MASK           0x001FA000 //0b0000 0000 0001 1111 1100 0000 0000 0000
@@ -40,7 +40,7 @@ mat4 rotationMatrix(vec3 axis, float angle)
 float mandelbrot(vec3 p, vec4 params)
 {
     vec3 z = p;
-	float dr = 1.0 + params.g * 10;
+	float dr = 1.0;
 	float r = 0.0;
 
 	for (int i = 0; i < 10; i++) {
