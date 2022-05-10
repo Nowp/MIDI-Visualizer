@@ -21,6 +21,8 @@ typedef struct {
   float time;
   uint32_t table;
   uint32_t filter;
+  uint32_t resolutionX;
+  uint32_t resolutionY;
 } DJData;
 """)
 ffibuilder.set_source('_main', '')
@@ -44,7 +46,7 @@ if not window:
 wm_info = sdl2.SDL_SysWMinfo()
 sdl2.SDL_VERSION(wm_info.version)
 sdl2.SDL_GetWindowWMInfo(window, byref(wm_info))
-# sdl2.SDL_SetWindowFullscreen(window, sdl2.SDL_WINDOW_FULLSCREEN)
+#sdl2.SDL_SetWindowFullscreen(window, sdl2.SDL_WINDOW_FULLSCREEN)
 
 # ----------
 # Create instance
@@ -640,6 +642,8 @@ def draw_frame():
     constants.time = clock() - start_time
     constants.table = (high << (7*2)) + (med << 7) + low
     constants.filter = pfilter
+    constants.resolutionX = WIDTH
+    constants.resolutionY = HEIGHT
 
     try:
         image_index = vkAcquireNextImageKHR(logical_device, swapchain, UINT64_MAX, semaphore_image_available, None)
@@ -675,7 +679,7 @@ def draw_frame():
         # Bing pipeline
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline)
 
-        vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(c_float) + 2 * sizeof(c_uint32), constants)
+        vkCmdPushConstants(command_buffer, pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(c_float) + 4 * sizeof(c_uint32), constants)
 
         # Draw
         vkCmdDraw(command_buffer, 3, 1, 0, 0)
@@ -705,7 +709,7 @@ start_time = clock()
 last_time = clock() * 1000
 fps = 0
 
-low, med, high, pfilter = 0, 0, 0, 0
+low, med, high, pfilter = [2**4 for _ in range(4)]
 
 
 def message_received(msg, _):
